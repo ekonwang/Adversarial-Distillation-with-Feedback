@@ -1,0 +1,6 @@
+__pycache__/
+checkpoint/
+data/
+log/
+wandb/
+.vscode/
