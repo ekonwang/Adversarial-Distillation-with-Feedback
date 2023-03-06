@@ -72,7 +72,7 @@ class ARDPROLoss():
     @staticmethod 
     def cal(basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets, alpha, temp):
         stu_loss = ARDLoss.cal(basic_outputs, outputs, teacher_basic_outputs, targets, alpha, temp)
-        teacher_loss = _XENT_loss.cal(teacher_outputs, targets)
+        teacher_loss = XENTLoss.cal(teacher_outputs, targets)
         return stu_loss, teacher_loss
 
 
@@ -84,7 +84,7 @@ class TRADESLoss():
         return TRADESLoss.cal(basic_outputs, outputs, targets, self.temp, self.lamda)
     @staticmethod 
     def cal(basic_outputs, outputs, targets, temp, lambd):
-        sat_loss = _XENT_loss.cal(basic_outputs, targets)
+        sat_loss = XENTLoss.cal(basic_outputs, targets)
         kl_loss = KLoss.cal(basic_outputs, outputs, temp)*lambd
         return sat_loss+kl_loss
 
@@ -96,7 +96,7 @@ class SELoss():
         return SELoss.cal(basic_outputs, outputs)
     @staticmethod 
     def cal(basic_outputs, outputs, no_reduction=False):
-        score = (F.softmax(basic_outputs, dim=1) - F.softmax(outputs, dim=1))**2
+        score = torch.mean((F.softmax(basic_outputs, dim=1) - F.softmax(outputs, dim=1))**2, dim=1)
         return (score if no_reduction else score.mean())
 
 # 不同的 Alpha 因子算法可能有强度不一致的问题

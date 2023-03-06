@@ -3,4 +3,5 @@ checkpoint/
 data/
 log/
 wandb/
+repo/
 .vscode/

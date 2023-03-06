@@ -6,7 +6,6 @@ import torch.backends.cudnn as cudnn
 import numpy as np
 import os
 import wandb
-import math
 from tqdm import tqdm
 from models import *
 from attack import *
@@ -15,16 +14,8 @@ from data import *
 from method import *
 
 TEACHER=1
-
 args = parse_args()
-if args.output == '':
-    args.output = '{}-{}'.format(args.model,args.dataset)
-if args.debug:
-    DEBUG = 1
-num_steps=0
-if DEBUG:
-    args.epochs = 2
-
+set_seed(args.seed)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 trainloader, testloader, num_classes = get_loader(args.dataset)
@@ -56,10 +47,22 @@ adv_teacher_net = AttackPGD(teacher_net, config)
 if device == 'cuda':
     cudnn.benchmark = True
 
+if args.model_path != '':
+    print('==> Loading student..')
+    basic_net.load_state_dict(torch.load(args.model_path))
 if args.teacher_path != '':
     print('==> Loading teacher..')
     teacher_net.load_state_dict(torch.load(args.teacher_path))
     teacher_net.eval()
+
+# output and epochs
+if args.output == '':
+    args.output = '{}-{}'.format(args.model,args.dataset)
+if args.debug:
+    DEBUG = 1
+num_steps=args.resume_epoch*len(trainloader)
+if DEBUG:
+    args.epochs = args.resume_epoch+2
 
 
 def train(epoch, optimizer, teacher_optimizer=None):
@@ -103,18 +106,21 @@ def train(epoch, optimizer, teacher_optimizer=None):
                 if args.aux_loss == 'SAT':
                     aux_loss = XENTLoss.cal(teacher_outputs, targets, no_reduction=True)
                 elif args.aux_loss == 'KL':
-                    aux_loss = KLoss.cal(teacher_basic_outputs, teacher_outputs, no_reduction=True)
+                    aux_loss = KLoss.cal(teacher_basic_outputs, teacher_outputs, args.temp, no_reduction=True)
                 elif args.aux_loss == 'SE':
                     aux_loss = SELoss.cal(teacher_basic_outputs, teacher_outputs, no_reduction=True)
-
-                weighted_aux=(aux_loss*alpha_factor).mean()
-                if args.memorization:
-                    teacher_self_outputs, _ = adv_teacher_net(inputs, targets)
-                    teacher_loss=weighted_aux+TRADESLoss.cal(teacher_basic_outputs, teacher_self_outputs, targets, args.temp, args.lambd)
-                else:
-                    teacher_loss=weighted_aux
                 
+                if not DEBUG:
+                    wandb.log({'Mean alpha': float(torch.mean(alpha_factor))}, step=num_steps)
+
+                teacher_loss=(aux_loss*alpha_factor).mean()
+                teacher_loss /= torch.mean(alpha_factor)
                 loss = ARDLoss.cal(basic_outputs, outputs, teacher_basic_outputs, targets, args.alpha, args.temp)
+            
+            if args.memorization:
+                teacher_self_outputs, _ = adv_teacher_net(inputs, targets)
+                aux_loss = TRADESLoss.cal(teacher_basic_outputs, teacher_self_outputs, targets, args.temp, args.lambd)
+                teacher_loss += aux_loss
 
         # FOLLOWING: only for pretraining teacher
         # SAT & TRADES don't need teacher
@@ -124,6 +130,8 @@ def train(epoch, optimizer, teacher_optimizer=None):
         #     loss = TRADESLoss.cal(basic_outputs, outputs, targets, args.temp, args.lambd)
         # elif args.loss == 'NAT':
         #     loss = XENT_loss(basic_outputs, targets)
+        if should_teacher_tune(args.loss):
+            teacher_loss.backward(retain_graph=True)
         loss.backward()
 
 
@@ -156,7 +164,6 @@ def train(epoch, optimizer, teacher_optimizer=None):
 
         optimizer.step()
         if should_teacher_tune(args.loss):
-            teacher_loss.backward()
             teacher_optimizer.step()
         train_loss = loss.item()
         _, adv_predicted = outputs.max(1)
@@ -177,15 +184,16 @@ def train(epoch, optimizer, teacher_optimizer=None):
         if DEBUG:
             if batch_idx >= 1: break
 
-    if (epoch+1)%args.save_period == 0:
-        state = basic_net.state_dict()
-        if not os.path.isdir(epoch_dir(args, epoch, args.project_name)):
-            os.makedirs(epoch_dir(args, epoch, args.project_name))
-        torch.save(state, epoch_dir(args, epoch, args.project_name)+'model_ckpt.t7')
-        if should_teacher_tune(args.loss):
-            teacher_state = teacher_net.state_dict()
-            torch.save(teacher_state, epoch_dir(args, epoch, args.project_name)+'teacher_ckpt.t7')
     if not DEBUG:
+        if (epoch+1)%args.save_period == 0:
+            state = basic_net.state_dict()
+            if not os.path.isdir(epoch_dir(args, epoch, args.project_name)):
+                os.makedirs(epoch_dir(args, epoch, args.project_name))
+            torch.save(state, epoch_dir(args, epoch, args.project_name)+'model_ckpt.t7')
+            if should_teacher_tune(args.loss):
+                teacher_state = teacher_net.state_dict()
+                torch.save(teacher_state, epoch_dir(args, epoch, args.project_name)+'teacher_ckpt.t7')
+
         wandb.log({'Natural train acc': natural_acc, 'Robust train acc': robust_acc}, step=num_steps)
 
     print('Epoch {} Mean Training Loss:'.format(epoch), train_loss/len(iterator), 
@@ -241,7 +249,7 @@ def test(epoch, optimizer):
         print('Teacher acc:', natural_teacher_acc)
         print('Teacher robust acc:', adv_teacher_acc)
         print('Teacher robust acc self', adv_teacher_acc_self)
-    if not DEBUG:
+    if not DEBUG and not args.eval_only:
         wandb.log({'Natural test acc': natural_acc, 'Robust test acc': robust_acc}, step=num_steps)
         if should_teacher_tune(args.loss):
             wandb.log({'Natural teacher acc': natural_teacher_acc, 
@@ -251,8 +259,7 @@ def test(epoch, optimizer):
     iterator.close()
     return natural_acc, robust_acc
 
-# 一个现象：DEBUG 模式下最初几个 epoch robust acc 下降，n acc 上升。
-
+# 一个现象：DEBUG 模式下最初几个 epoch robust acc 下降，n acc 上升。 
 
 def main():
     if not DEBUG:
@@ -264,12 +271,13 @@ def main():
     manager = Manager(net, device, adversarial=True)
     for epoch in range(args.resume_epoch, args.epochs):
         adjust_learning_rate(args.lr, optimizer, epoch)
-        adjust_teacher_learning_rate(args.teacher_lr, teacher_optimizer, epoch)
+        if should_teacher_tune(args.loss):
+            adjust_teacher_learning_rate(args.teacher_lr, teacher_optimizer, epoch)
         if should_teacher_tune(args.loss):
             train_loss = train(epoch, optimizer, teacher_optimizer)
         else:
             train_loss = train(epoch, optimizer)
-        if (epoch+1)%args.val_period == 0:
+        if (epoch+1)%args.val_period == 0 and not DEBUG:
             # current v.s. history best
             natural_val, robust_val = test(epoch, optimizer)
             if robust_val > best_val:
@@ -280,6 +288,10 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if args.eval_only:
+        args.loss = ''
+        test(0, None)
+    else:
+        main()
 
 

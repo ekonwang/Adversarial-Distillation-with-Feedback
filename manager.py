@@ -1,6 +1,8 @@
 import os
 import torch
+import random 
 import argparse
+import numpy as np
 import seaborn as sns
 import torch.nn as nn
 import matplotlib.pyplot as plt
@@ -12,15 +14,19 @@ DEBUG=0
 def parse_args():
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
     parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
-    parser.add_argument('--teacher_lr', default=1e-3, type=float, help='teacher learning rate')
+    parser.add_argument('--teacher_lr', default=1e-5, type=float, help='teacher learning rate')
     parser.add_argument('--lr_schedule', type=int, nargs='+', default=[100, 150], help='Decrease learning rate at these epochs.')
     parser.add_argument('--lr_factor', default=0.1, type=float, help='factor by which to decrease lr')
     parser.add_argument('--loss', default='TRADES', type=str, help='loss function')
     parser.add_argument('--epochs', default=100, type=int, help='number of epochs for training')
     parser.add_argument('--output', default = '', type=str, help='output subdirectory')
+    parser.add_argument('--seed', type=int, default=42)
+
     parser.add_argument('--model', default = 'MobileNetV2', type = str, help = 'student model name')
+    parser.add_argument('--model_path', default='', type=str, help='student model checkpoint')
     parser.add_argument('--teacher_model', default = 'ResNet18', type = str, help = 'teacher network model')
     parser.add_argument('--teacher_path', default = '', type=str, help='path of teacher net being distilled')
+
     parser.add_argument('--temp', default=30.0, type=float, help='temperature for distillation')
     parser.add_argument('--val_period', default=1, type=int, help='print every __ epoch')
     parser.add_argument('--save_period', default=1, type=int, help='save every __ epoch')
@@ -31,12 +37,21 @@ def parse_args():
     parser.add_argument('--max_grad_norm', type=float, default=1.0, help='max gradient norm')
     parser.add_argument('--project_name', type=str, default='ARD-debug')
     parser.add_argument('--resume_epoch', default=0, type=int)
+    parser.add_argument('--eval_only', action='store_true')
 
     parser.add_argument('--memorization', type=int, default=0, help='if keep training during guidance')
     parser.add_argument('--aux_loss', type=str, default='SAT', help='teacher auxiliary loss')
     parser.add_argument('--aux_alpha', type=str, default='MOST', help='teacher sample wise attention strategy')
     args = parser.parse_args()
+    print(args)
     return args
+
+def set_seed(seed: int):
+    """Sets the relevant random seeds."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.random.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
 
 def adjust_learning_rate(lr, optimizer, epoch):
     if epoch >= 90:

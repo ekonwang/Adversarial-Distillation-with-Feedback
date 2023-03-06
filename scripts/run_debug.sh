@@ -1,6 +1,6 @@
 #!/bin/bash
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=4
 
 export TRANSFORMERS_OFFLINE=1
 export HF_DATASETS_OFFLINE=1
@@ -14,16 +14,20 @@ teacher_path=/root/checkpoint/tinyproject/CIFAR10/TRADES-CIFAR10-ResNet18-lambd1
 model_path=/root/checkpoint/distill_project/distill-T-ResNet18-S-MobileNetV2-D-CIFAR10-ARD/epoch69/model_ckpt.t7
 
 loss=ARD-PRO
+project_name=CT
 for teacher_model in ResNet18 
 do 
     for dataset in CIFAR10
     do
         for model in MobileNetV2
         do
-            name=distill-T-${teacher_model}-S-${model}-D-${dataset}-${loss}-TRADES
+            # name=coarse
+            name=coarse-memorization
+            # name=baseline
             # name=distill-T-${teacher_model}-S-${model}-D-${dataset}-${loss}
 
-            python -u main_debug.py --teacher_model ${teacher_model} \
+            python -u main_d.py --teacher_model ${teacher_model} \
+            --project_name ${project_name} \
             --model ${model} \
             --output ${name} \
             --loss ${loss} \
@@ -31,6 +35,7 @@ do
             --teacher_path ${teacher_path} \
             --model_path ${model_path} \
             --resume_epoch 70 \
+            --memorization 1 \
             | tee log/${name}.log
         done
     done
