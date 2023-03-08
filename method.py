@@ -3,8 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # batch mean reduction 
-# _KL_loss = nn.KLDivLoss(reduction='batchmean')
-_KL_loss = nn.KLDivLoss()
+_KL_loss = nn.KLDivLoss(reduction='batchmean')
 _XENT_loss = nn.CrossEntropyLoss()
 
 # No mean reduction
@@ -154,5 +153,4 @@ class AlphaFactorSE():
         return AlphaFactorSE.cal(basic_outputs, outputs)
     @staticmethod 
     def cal(basic_outputs, outputs):
-        alpha_se = torch.sum((F.softmax(basic_outputs, dim=1) - F.softmax(outputs, dim=1))**2, dim=1)
-        return alpha_se
+        return SELoss.cal(basic_outputs, outputs)

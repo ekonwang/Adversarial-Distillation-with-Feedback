@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument('--teacher_model', default = 'ResNet18', type = str, help = 'teacher network model')
     parser.add_argument('--teacher_path', default = '', type=str, help='path of teacher net being distilled')
 
-    parser.add_argument('--temp', default=30.0, type=float, help='temperature for distillation')
+    parser.add_argument('--temp', default=1., type=float, help='temperature for distillation')
     parser.add_argument('--val_period', default=1, type=int, help='print every __ epoch')
     parser.add_argument('--save_period', default=1, type=int, help='save every __ epoch')
     parser.add_argument('--alpha', default=1.0, type=float, help='weight for sum of losses')
