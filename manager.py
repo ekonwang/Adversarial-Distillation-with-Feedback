@@ -6,6 +6,7 @@ import numpy as np
 import seaborn as sns
 import torch.nn as nn
 import matplotlib.pyplot as plt
+from pprint import pprint
 
 from tqdm import tqdm
 
@@ -39,11 +40,13 @@ def parse_args():
     parser.add_argument('--resume_epoch', default=0, type=int)
     parser.add_argument('--eval_only', action='store_true')
 
-    parser.add_argument('--memorization', type=int, default=0, help='if keep training during guidance')
+    parser.add_argument('--memorization', type=int, default=0, help='teacher memorization loss')
     parser.add_argument('--aux_loss', type=str, default='SAT', help='teacher auxiliary loss')
     parser.add_argument('--aux_alpha', type=str, default='MOST', help='teacher sample wise attention strategy')
+    parser.add_argument('--aux_lamda', type=float, default=1.0, help='teacher aux loss adjust factor')
     args = parser.parse_args()
-    print(args)
+
+    pprint(vars(args))    
     return args
 
 def set_seed(seed: int):
@@ -85,6 +88,7 @@ def should_teacher_tune(loss_name):
     registered_loss_names = [
         'ARD-PRO',
         'COMB',
+        'KL-Coarse',
     ]
     return (loss_name in registered_loss_names)
 

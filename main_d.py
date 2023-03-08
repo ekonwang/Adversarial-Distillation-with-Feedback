@@ -93,9 +93,11 @@ def train(epoch, optimizer, teacher_optimizer=None):
             teacher_outputs = teacher_net(pert_inputs)
             if args.loss == 'ARD-PRO':
                 loss, teacher_loss = ARDPROLoss.cal(basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets, args.alpha, args.temp)
+            elif args.loss == 'KL-Coarse':
+                loss, teacher_loss = KLCoarseLoss.cal(basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets, args.alpha, args.temp)
             elif args.loss == 'COMB':
                 if args.aux_alpha == 'MOST':
-                    alpha_factor = AlphaFactorMost.cal(teacher_outputs, targets)
+                    alpha_factor = AlphaFactorMost.cal(teacher_outputs, targets) 
                 elif args.aux_alpha == 'LEAST':
                     alpha_factor = AlphaFactorLeast.cal(teacher_outputs, targets)
                 elif args.aux_alpha == 'TargetSE':
@@ -113,14 +115,14 @@ def train(epoch, optimizer, teacher_optimizer=None):
                 if not DEBUG:
                     wandb.log({'Mean alpha': float(torch.mean(alpha_factor))}, step=num_steps)
 
-                teacher_loss=(aux_loss*alpha_factor).mean()
-                teacher_loss /= torch.mean(alpha_factor)
+                weighted_aux_loss=(aux_loss*alpha_factor).mean()*args.aux_lamda
+                teacher_loss=weighted_aux_loss/alpha_factor.mean()
                 loss = ARDLoss.cal(basic_outputs, outputs, teacher_basic_outputs, targets, args.alpha, args.temp)
             
             if args.memorization:
                 teacher_self_outputs, _ = adv_teacher_net(inputs, targets)
-                aux_loss = TRADESLoss.cal(teacher_basic_outputs, teacher_self_outputs, targets, args.temp, args.lambd)
-                teacher_loss += aux_loss
+                memo_loss = TRADESLoss.cal(teacher_basic_outputs, teacher_self_outputs, targets, args.temp, args.lambd)
+                teacher_loss += memo_loss
 
         # FOLLOWING: only for pretraining teacher
         # SAT & TRADES don't need teacher

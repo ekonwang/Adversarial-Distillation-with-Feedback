@@ -2,13 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
+# batch mean reduction 
+# _KL_loss = nn.KLDivLoss(reduction='batchmean')
 _KL_loss = nn.KLDivLoss()
 _XENT_loss = nn.CrossEntropyLoss()
 
+# No mean reduction
 _KL_no_reduction = nn.KLDivLoss(reduction='none')
 _XENT_no_reduction = nn.CrossEntropyLoss(reduction='none')
-
 
 class KLoss():
     def __init__(self, temp, no_reduction=False):
@@ -17,12 +18,11 @@ class KLoss():
     def __call__(self, basic_outputs, outputs):
         return KLoss.cal(basic_outputs, outputs, self.temp, self.no_reduction)
     @staticmethod 
-    def cal(basic_outputs, outputs, temp, no_reduction=False):
+    def cal(basic_outputs, outputs, temp=1., no_reduction=False):
         if no_reduction:
             return temp*temp*_KL_no_reduction(F.log_softmax(outputs/temp, dim=1),F.softmax(basic_outputs/temp, dim=1)).sum(dim=1)
         else:
             return temp*temp*_KL_loss(F.log_softmax(outputs/temp, dim=1),F.softmax(basic_outputs/temp, dim=1))
-
 
 
 class XENTLoss():
@@ -36,7 +36,6 @@ class XENTLoss():
             return _XENT_no_reduction(outputs, labels)
         else:
             return _XENT_loss(outputs, labels)
-
 
 
 class ARDLoss():
@@ -65,14 +64,25 @@ class ARDPROLoss():
     def __init__(self, alpha, temp):
         self.alpha = alpha
         self.temp = temp 
-        self.ardloss = ARDLoss(alpha, temp)
-        self.satloss = _XENT_loss()
     def __call__(self, basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets):
         return ARDPROLoss.cal(basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets, self.alpha, self.temp)
     @staticmethod 
     def cal(basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets, alpha, temp):
         stu_loss = ARDLoss.cal(basic_outputs, outputs, teacher_basic_outputs, targets, alpha, temp)
         teacher_loss = XENTLoss.cal(teacher_outputs, targets)
+        return stu_loss, teacher_loss
+
+
+class KLCoarseLoss():
+    def __init__(self, alpha, temp):
+        self.alpha = alpha
+        self.temp = temp 
+    def __call__(self, basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets):
+        return ARDPROLoss.cal(basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets, self.alpha, self.temp)
+    @staticmethod 
+    def cal(basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets, alpha, temp):
+        stu_loss = ARDLoss.cal(basic_outputs, outputs, teacher_basic_outputs, targets, alpha, temp)
+        teacher_loss = KLoss.cal(teacher_basic_outputs, teacher_outputs, temp)
         return stu_loss, teacher_loss
 
 
@@ -96,13 +106,13 @@ class SELoss():
         return SELoss.cal(basic_outputs, outputs)
     @staticmethod 
     def cal(basic_outputs, outputs, no_reduction=False):
-        score = torch.mean((F.softmax(basic_outputs, dim=1) - F.softmax(outputs, dim=1))**2, dim=1)
+        score = torch.sum((F.softmax(basic_outputs, dim=1) - F.softmax(outputs, dim=1))**2, dim=1)
         return (score if no_reduction else score.mean())
 
 # 不同的 Alpha 因子算法可能有强度不一致的问题
 
-
 class AlphaFactorLeast():
+    adjust_const = 1/0.7301
     def __init__(self, factor=1.):
         self.factor=factor
     def __call__(self, outputs, targets):
@@ -113,6 +123,7 @@ class AlphaFactorLeast():
 
 
 class AlphaFactorMost():
+    adjust_const = 1/0.2813
     def __init__(self, factor=1.):
         self.factor=factor
     def __call__(self, outputs, targets):
@@ -123,6 +134,7 @@ class AlphaFactorMost():
 
 
 class AlphaFactorTargetSE():
+    adjust_const = 1/0.1514
     def __init__(self, factor=1.):
         self.factor=factor 
     def __call__(self, basic_outputs, outputs, targets):
@@ -135,11 +147,12 @@ class AlphaFactorTargetSE():
 
 
 class AlphaFactorSE():
+    adjust_const = 1/0.2341
     def __init__(self, factor=1.):
         self.factor=factor 
     def __call__(self, basic_outputs, outputs):
         return AlphaFactorSE.cal(basic_outputs, outputs)
     @staticmethod 
     def cal(basic_outputs, outputs):
-        alpha_se = torch.mean((F.softmax(basic_outputs, dim=1) - F.softmax(outputs, dim=1))**2, dim=1)
+        alpha_se = torch.sum((F.softmax(basic_outputs, dim=1) - F.softmax(outputs, dim=1))**2, dim=1)
         return alpha_se
