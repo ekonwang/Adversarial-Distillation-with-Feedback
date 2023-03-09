@@ -37,8 +37,9 @@ if TEACHER:
 		teacher_net = ResNet18(num_classes=num_classes)
 	teacher_net = teacher_net.to(device)
 
+EPSILON = 8.0 / 255
 config = {
-    'epsilon': 8.0 / 255,
+    'epsilon': EPSILON,
     'num_steps': 5,
     'step_size': 2.0 / 255,
 }
@@ -104,6 +105,10 @@ def train(epoch, optimizer, teacher_optimizer=None):
                     alpha_factor = AlphaFactorTargetSE.cal(teacher_basic_outputs, teacher_outputs, targets)
                 elif args.aux_alpha == 'SE':
                     alpha_factor = AlphaFactorSE.cal(teacher_basic_outputs, teacher_outputs)
+                elif args.aux_alpha == 'FOSC':
+                    xent_loss = XENTLoss.cal(teacher_outputs, targets)
+                    grad = torch.autograd.grad(xent_loss, [pert_inputs], retain_graph=True)[0]
+                    alpha_factor = AlphaFOSC.cal(EPSILON, grad, pert_inputs, inputs)
 
                 if args.aux_loss == 'SAT':
                     aux_loss = XENTLoss.cal(teacher_outputs, targets, no_reduction=True)
@@ -113,7 +118,11 @@ def train(epoch, optimizer, teacher_optimizer=None):
                     aux_loss = SELoss.cal(teacher_basic_outputs, teacher_outputs, no_reduction=True)
                 
                 if not DEBUG:
-                    wandb.log({'Mean alpha': float(torch.mean(alpha_factor))}, step=num_steps)
+                    wandb.log(
+                        {'Mean alpha': float(torch.mean(alpha_factor)),
+                         'Max alpha': float(torch.max(alpha_factor)),
+                         'Min alpha': float(torch.min(alpha_factor))
+                    }, step=num_steps)
 
                 weighted_aux_loss=(aux_loss*alpha_factor).mean()*args.aux_lamda
                 teacher_loss=weighted_aux_loss/alpha_factor.mean()
@@ -225,7 +234,7 @@ def test(epoch, optimizer):
             if should_teacher_tune(args.loss):
                 basic_teacher_output = teacher_net(inputs)
                 adv_teacher_output = teacher_net(pert_inputs)
-                adv_teacher_output_self, pert_teacher_inputs = adv_teacher_net(inputs, targets)
+                adv_teacher_output_self, _ = adv_teacher_net(inputs, targets)
                 _, teacher_predicted = basic_teacher_output.max(1)
                 _, adv_teacher_predicted = adv_teacher_output.max(1)
                 _, adv_teacher_predicted_self = adv_teacher_output_self.max(1)

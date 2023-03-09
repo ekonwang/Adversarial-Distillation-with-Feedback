@@ -16,7 +16,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
     parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
     parser.add_argument('--teacher_lr', default=1e-5, type=float, help='teacher learning rate')
-    parser.add_argument('--lr_schedule', type=int, nargs='+', default=[100, 150], help='Decrease learning rate at these epochs.')
+    # parser.add_argument('--lr_schedule', type=int, nargs='+', default=[100, 150], help='Decrease learning rate at these epochs.')
     parser.add_argument('--lr_factor', default=0.1, type=float, help='factor by which to decrease lr')
     parser.add_argument('--loss', default='TRADES', type=str, help='loss function')
     parser.add_argument('--epochs', default=100, type=int, help='number of epochs for training')

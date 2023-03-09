@@ -154,3 +154,17 @@ class AlphaFactorSE():
     @staticmethod 
     def cal(basic_outputs, outputs):
         return SELoss.cal(basic_outputs, outputs)
+
+
+def dot(vec1, vec2):
+    return torch.sum(vec1 * vec2, dim=(1, 2, 3))
+
+
+class AlphaFOSC():
+    def __init__(self):
+        pass
+    def __call__(self, epsilon, grad, pert_inputs, origin_inputs):
+        return AlphaFOSC.cal(epsilon, grad, pert_inputs, origin_inputs)
+    @staticmethod
+    def cal(epsilon, grad, pert_inputs, origin_inputs):
+        return epsilon*torch.norm(grad, p=1, dim=(1, 2, 3)) - dot(pert_inputs-origin_inputs, grad)
