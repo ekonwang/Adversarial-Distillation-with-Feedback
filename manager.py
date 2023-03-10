@@ -22,6 +22,7 @@ def parse_args():
     parser.add_argument('--epochs', default=100, type=int, help='number of epochs for training')
     parser.add_argument('--output', default = '', type=str, help='output subdirectory')
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--output_image', type=str, default='image.png')
 
     parser.add_argument('--model', default = 'MobileNetV2', type = str, help = 'student model name')
     parser.add_argument('--model_path', default='', type=str, help='student model checkpoint')

@@ -97,6 +97,8 @@ def train(epoch, optimizer, teacher_optimizer=None):
             elif args.loss == 'KL-Coarse':
                 loss, teacher_loss = KLCoarseLoss.cal(basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets, args.alpha, args.temp)
             elif args.loss == 'COMB':
+                # inner utils
+                
                 if args.aux_alpha == 'MOST':
                     alpha_factor = AlphaFactorMost.cal(teacher_outputs, targets) 
                 elif args.aux_alpha == 'LEAST':
@@ -106,9 +108,11 @@ def train(epoch, optimizer, teacher_optimizer=None):
                 elif args.aux_alpha == 'SE':
                     alpha_factor = AlphaFactorSE.cal(teacher_basic_outputs, teacher_outputs)
                 elif args.aux_alpha == 'FOSC':
-                    xent_loss = XENTLoss.cal(teacher_outputs, targets)
-                    grad = torch.autograd.grad(xent_loss, [pert_inputs], retain_graph=True)[0]
+                    grad = fosc_deps(pert_inputs, teacher_outputs, targets)
                     alpha_factor = AlphaFOSC.cal(EPSILON, grad, pert_inputs, inputs)
+                elif args.aux_alpha == 'invFOSC':
+                    grad = fosc_deps(pert_inputs, teacher_outputs, targets)
+                    alpha_factor = AlphainvFOSC.cal(EPSILON, grad, pert_inputs, inputs)
 
                 if args.aux_loss == 'SAT':
                     aux_loss = XENTLoss.cal(teacher_outputs, targets, no_reduction=True)
@@ -124,8 +128,9 @@ def train(epoch, optimizer, teacher_optimizer=None):
                          'Min alpha': float(torch.min(alpha_factor))
                     }, step=num_steps)
 
-                weighted_aux_loss=(aux_loss*alpha_factor).mean()*args.aux_lamda
-                teacher_loss=weighted_aux_loss/alpha_factor.mean()
+                alpha_factor = alpha_factor.detach()
+                alpha_factor = rank(alpha_factor)
+                teacher_loss = (aux_loss * alpha_factor).mean()*args.aux_lamda
                 loss = ARDLoss.cal(basic_outputs, outputs, teacher_basic_outputs, targets, args.alpha, args.temp)
             
             if args.memorization:
@@ -297,9 +302,11 @@ def main():
                 state = basic_net.state_dict()
                 torch.save(state, current_dir(args, args.project_name)+'optimal_ckpt.t7'.format(epoch))
 
-
 if __name__ == '__main__':
-    if args.eval_only:
+    if True:
+        from vis import *
+        visualize_metric_vs_prob(net, teacher_net, testloader, device, fosc_cal, EPSILON, args.output_image)
+    elif args.eval_only:
         args.loss = ''
         test(0, None)
     else:

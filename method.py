@@ -109,62 +109,105 @@ class SELoss():
         return (score if no_reduction else score.mean())
 
 # 不同的 Alpha 因子算法可能有强度不一致的问题
+# 解决强度不一致或许不能简单地将 mean alpha 置为 1，而需要将 max alpha 置 1，同时保证总体强度（通过次方运算）
 
-class AlphaFactorLeast():
+
+def rank(values):
+    # 保证均值为 1
+    return torch.argsort(values).to(torch.float) / (values.shape[0]-1) * 2
+
+class AlphaFactor():
+    def __init__(self, factor=1.):
+        self.factor = factor
+
+
+class AlphaFactorLeast(AlphaFactor):
     adjust_const = 1/0.7301
     def __init__(self, factor=1.):
-        self.factor=factor
+        super().__init__(factor)
+
     def __call__(self, outputs, targets):
         return AlphaFactorLeast.cal(outputs, targets, self.factor)
+    
     @staticmethod 
     def cal(outputs, targets, factor=1.):
-        return 1-AlphaFactorMost.cal(outputs, targets)**factor
+        values = (1-AlphaFactorMost.cal(outputs, targets)**factor)
+        return values
 
 
-class AlphaFactorMost():
+class AlphaFactorMost(AlphaFactor):
     adjust_const = 1/0.2813
     def __init__(self, factor=1.):
-        self.factor=factor
+        super().__init__(factor)
+
     def __call__(self, outputs, targets):
         return AlphaFactorMost.cal(outputs, targets, self.factor)
+    
     @staticmethod 
     def cal(outputs, targets, factor=1.):
-        return F.softmax(outputs, dim=1)[torch.arange(outputs.shape[0]), targets]**factor
+        values = F.softmax(outputs, dim=1)[torch.arange(outputs.shape[0]), targets]**factor
+        return values
 
-
-class AlphaFactorTargetSE():
+class AlphaFactorTargetSE(AlphaFactor):
     adjust_const = 1/0.1514
     def __init__(self, factor=1.):
-        self.factor=factor 
+        super().__init__(factor)
+
     def __call__(self, basic_outputs, outputs, targets):
         return AlphaFactorTargetSE.cal(basic_outputs, outputs, targets)
+    
     @staticmethod 
     def cal(basic_outputs, outputs, targets):
         basic_out = AlphaFactorMost.cal(basic_outputs, targets)
         out = AlphaFactorMost.cal(outputs, targets)
-        return (basic_out - out)**2
+        values = (basic_out - out)**2
+        return values
 
 
-class AlphaFactorSE():
+class AlphaFactorSE(AlphaFactor):
     adjust_const = 1/0.2341
     def __init__(self, factor=1.):
-        self.factor=factor 
+        super().__init__(factor)
+
     def __call__(self, basic_outputs, outputs):
         return AlphaFactorSE.cal(basic_outputs, outputs)
+    
     @staticmethod 
     def cal(basic_outputs, outputs):
-        return SELoss.cal(basic_outputs, outputs)
+        values = SELoss.cal(basic_outputs, outputs)
+        return values
 
+
+def fosc_deps(pert_inputs, teacher_outputs, targets):
+    xent_loss = XENTLoss.cal(teacher_outputs, targets)
+    grad = torch.autograd.grad(xent_loss, [pert_inputs], retain_graph=True)[0]
+    return grad.detach()
 
 def dot(vec1, vec2):
     return torch.sum(vec1 * vec2, dim=(1, 2, 3))
 
 
-class AlphaFOSC():
-    def __init__(self):
-        pass
+class AlphaFOSC(AlphaFactor):
+    def __init__(self, factor=1.):
+        super().__init__(factor)
+
     def __call__(self, epsilon, grad, pert_inputs, origin_inputs):
         return AlphaFOSC.cal(epsilon, grad, pert_inputs, origin_inputs)
+    
     @staticmethod
     def cal(epsilon, grad, pert_inputs, origin_inputs):
         return epsilon*torch.norm(grad, p=1, dim=(1, 2, 3)) - dot(pert_inputs-origin_inputs, grad)
+
+
+class AlphainvFOSC(AlphaFactor):
+    def __init__(self, factor=1.):
+        super().__init__(factor)
+
+    def __call__(self, epsilon, grad, pert_inputs, origin_inputs):
+        return AlphaFOSC.cal(epsilon, grad, pert_inputs, origin_inputs)
+    
+    @staticmethod
+    def cal(epsilon, grad, pert_inputs, origin_inputs):
+        fosc = AlphaFOSC.cal(epsilon, grad, pert_inputs, origin_inputs)
+        max_fosc, min_fosc = torch.max(fosc), torch.min(fosc)
+        return max_fosc + min_fosc - fosc
