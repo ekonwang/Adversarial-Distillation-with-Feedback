@@ -127,9 +127,20 @@ def train(epoch, optimizer, teacher_optimizer=None):
                          'Max alpha': float(torch.max(alpha_factor)),
                          'Min alpha': float(torch.min(alpha_factor))
                     }, step=num_steps)
+                
+                pprint({'Mean alpha': float(torch.mean(alpha_factor)),
+                         'Max alpha': float(torch.max(alpha_factor)),
+                         'Min alpha': float(torch.min(alpha_factor))
+                    })
 
                 alpha_factor = alpha_factor.detach()
                 alpha_factor = rank(alpha_factor)
+
+                pprint({'Mean alpha': float(torch.mean(alpha_factor)),
+                         'Max alpha': float(torch.max(alpha_factor)),
+                         'Min alpha': float(torch.min(alpha_factor))
+                    })
+
                 teacher_loss = (aux_loss * alpha_factor).mean()*args.aux_lamda
                 loss = ARDLoss.cal(basic_outputs, outputs, teacher_basic_outputs, targets, args.alpha, args.temp)
             
@@ -303,7 +314,7 @@ def main():
                 torch.save(state, current_dir(args, args.project_name)+'optimal_ckpt.t7'.format(epoch))
 
 if __name__ == '__main__':
-    if True:
+    if False:
         from vis import *
         os.makedirs("./fig", exist_ok = True)
         visualize_metric_vs_prob(net, teacher_net, testloader, device, fosc_cal, EPSILON, args.output_image)
