@@ -305,6 +305,7 @@ def main():
 if __name__ == '__main__':
     if True:
         from vis import *
+        os.makedirs("./fig", exist_ok = True)
         visualize_metric_vs_prob(net, teacher_net, testloader, device, fosc_cal, EPSILON, args.output_image)
     elif args.eval_only:
         args.loss = ''
