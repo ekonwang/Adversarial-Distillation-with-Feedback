@@ -1,6 +1,6 @@
 #!/bin/bash
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
-export CUDA_VISIBLE_DEVICES=6
+export CUDA_VISIBLE_DEVICES=1
 
 # for model in WideResNet ResNet18 MobileNetV2
 teacher_model=ResNet18
@@ -13,8 +13,8 @@ memorization=1
 aux_lamda=1
 teacher_lr=1e-5
 
-for aux_lamda in 0.1
-# for aux_lamda in 0.1 1 3 6 10
+# for aux_lamda in 1
+for aux_lamda in 0.1 1 3 6 10
 do
     # for aux_alpha in MOST LEAST TargetSE SE FOSC
     for aux_alpha in FOSC
@@ -24,7 +24,7 @@ do
         do
 
             project_name=CT
-            name=${loss}-memorization-${aux_loss}-${aux_alpha}-aux_lamda_${aux_lamda}-rank
+            name=${loss}-memorization-${aux_loss}-${aux_alpha}-aux_lamda_${aux_lamda}-right-rank
 
             python -u main_d.py --teacher_model ${teacher_model} \
             --model ${model} \
@@ -41,7 +41,7 @@ do
             --epochs 100 \
             --teacher_lr ${teacher_lr} \
             --memorization ${memorization} \
-            --debug | tee log/${name}.log
+            | tee log/${name}.log
         done
     done
 done

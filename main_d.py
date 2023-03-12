@@ -135,10 +135,10 @@ def train(epoch, optimizer, teacher_optimizer=None):
 
                 alpha_factor = alpha_factor.detach()
                 alpha_factor = rank(alpha_factor)
-
-                teacher_loss = (aux_loss * alpha_factor).mean()*args.aux_lamda
+                teacher_loss = (aux_loss * alpha_factor).mean()
                 loss = ARDLoss.cal(basic_outputs, outputs, teacher_basic_outputs, targets, args.alpha, args.temp)
-            
+
+            teacher_loss *= args.aux_lamda
             if args.memorization:
                 teacher_self_outputs, _ = adv_teacher_net(inputs, targets)
                 memo_loss = TRADESLoss.cal(teacher_basic_outputs, teacher_self_outputs, targets, args.temp, args.lambd)

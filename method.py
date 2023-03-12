@@ -114,7 +114,7 @@ class SELoss():
 
 def rank(values):
     # 保证均值为 1
-    return torch.argsort(values).to(torch.float) / (values.shape[0]-1) * 2
+    return torch.argsort(torch.argsort(values)).to(torch.float) / (values.shape[0]-1) * 2
 
 class AlphaFactor():
     def __init__(self, factor=1.):
