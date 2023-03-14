@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 import numpy as np
 import os
+import copy
 import wandb
 from tqdm import tqdm
 from models import *
@@ -223,6 +224,22 @@ def train(epoch, optimizer, teacher_optimizer=None):
     iterator.close()
     return train_loss
 
+perts = []
+
+def bench_test():
+    student_correct = 0
+    teacher_correct = 0
+    total = 0
+    for pert_inputs, targets in perts:
+        teacher_outputs = teacher_net(pert_inputs)
+        student_outputs = basic_net(pert_inputs)
+        _, teacher_predicted = teacher_outputs.max(1)
+        _, student_predicted = student_outputs.max(1)
+        teacher_correct += teacher_predicted.eq(targets).sum().item()
+        student_correct += student_predicted.eq(targets).sum().item()
+        total += targets.size(0)
+    return 100.*teacher_correct/total, 100.*student_correct/total
+
 
 def test(epoch, optimizer):
     global num_steps
@@ -232,6 +249,7 @@ def test(epoch, optimizer):
     teacher_correct = 0
     adv_teacher_correct = 0
     adv_teacher_correct_self = 0
+    adv_student_correct_cross = 0
     total = 0
     with torch.no_grad():
         iterator = tqdm(testloader, ncols=0, leave=False)
@@ -242,16 +260,21 @@ def test(epoch, optimizer):
             _, adv_predicted = adv_outputs.max(1)
             _, natural_predicted = natural_outputs.max(1)
 
-            if should_teacher_tune(args.loss):
-                basic_teacher_output = teacher_net(inputs)
-                adv_teacher_output = teacher_net(pert_inputs)
-                adv_teacher_output_self, _ = adv_teacher_net(inputs, targets)
-                _, teacher_predicted = basic_teacher_output.max(1)
-                _, adv_teacher_predicted = adv_teacher_output.max(1)
-                _, adv_teacher_predicted_self = adv_teacher_output_self.max(1)
-                teacher_correct += teacher_predicted.eq(targets).sum().item()
-                adv_teacher_correct += adv_teacher_predicted.eq(targets).sum().item()
-                adv_teacher_correct_self += adv_teacher_predicted_self.eq(targets).sum().item()
+            # if should_teacher_tune(args.loss):
+            basic_teacher_output = teacher_net(inputs)
+            adv_teacher_output = teacher_net(pert_inputs)
+            adv_teacher_output_self, teacher_pert_inputs = adv_teacher_net(inputs, targets)
+            _, teacher_predicted = basic_teacher_output.max(1)
+            _, adv_teacher_predicted = adv_teacher_output.max(1)
+            _, adv_teacher_predicted_self = adv_teacher_output_self.max(1)
+            teacher_correct += teacher_predicted.eq(targets).sum().item()
+            adv_teacher_correct += adv_teacher_predicted.eq(targets).sum().item()
+            adv_teacher_correct_self += adv_teacher_predicted_self.eq(targets).sum().item()
+
+            # student robust acc on teacher pert inputs
+            student_adv_outputs_cross = basic_net(teacher_pert_inputs)
+            _, student_adv_preds_cross = student_adv_outputs_cross.max(1)
+            adv_student_correct_cross += student_adv_preds_cross.eq(targets).sum().item()
 
             natural_correct += natural_predicted.eq(targets).sum().item()
             total += targets.size(0)
@@ -259,25 +282,48 @@ def test(epoch, optimizer):
             iterator.set_description(str(adv_predicted.eq(targets).sum().item()/targets.size(0)))
             if DEBUG:
                 if batch_idx >= 9: break
+            
+            if epoch < 0:
+                perts.append((
+                    teacher_pert_inputs.clone().detach(), 
+                    targets.clone().detach()
+                ))
 
     robust_acc = 100.*adv_correct/total
     natural_acc = 100.*natural_correct/total
+    robsut_acc_cross = 100.*adv_student_correct_cross/total
     print('Natural acc:', natural_acc)
     print('Robust acc:', robust_acc)
-    if should_teacher_tune(args.loss):
-        natural_teacher_acc = 100.*teacher_correct/total
-        adv_teacher_acc = 100.*adv_teacher_correct/total
-        adv_teacher_acc_self = 100.*adv_teacher_correct_self/total
-        print('Teacher acc:', natural_teacher_acc)
-        print('Teacher robust acc:', adv_teacher_acc)
-        print('Teacher robust acc self', adv_teacher_acc_self)
+    print('Cross robust acc:', robsut_acc_cross)
+
+    # if should_teacher_tune(args.loss):
+    natural_teacher_acc = 100.*teacher_correct/total
+    adv_teacher_acc = 100.*adv_teacher_correct/total
+    adv_teacher_acc_self = 100.*adv_teacher_correct_self/total
+    print('Teacher acc:', natural_teacher_acc)
+    print('Teacher robust acc:', adv_teacher_acc)
+    print('Teacher robust acc self', adv_teacher_acc_self)
+
+    if epoch >= 0 and len(perts) > 0:
+        bench_teacher_acc, bench_student_acc = bench_test()
+        print('Benchmark teacher ', bench_teacher_acc)
+        print('Benchmark student ', bench_student_acc)
+
     if not DEBUG and not args.eval_only:
-        wandb.log({'Natural test acc': natural_acc, 'Robust test acc': robust_acc}, step=num_steps)
-        if should_teacher_tune(args.loss):
-            wandb.log({'Natural teacher acc': natural_teacher_acc, 
-                       'Robust teacher acc': adv_teacher_acc,
-                       'Robust teacher acc (self)': adv_teacher_acc_self
-                    }, step=num_steps)
+        wandb.log({'Natural test acc': natural_acc, 
+                   'Robust test acc': robust_acc,
+                   'Cross robust acc': robsut_acc_cross,
+                }, step=num_steps)
+        # if should_teacher_tune(args.loss):
+        wandb.log({'Natural teacher acc': natural_teacher_acc, 
+                    'Robust teacher acc': adv_teacher_acc,
+                    'Robust teacher acc (self)': adv_teacher_acc_self
+                }, step=num_steps)
+        if epoch >= 0 and len(perts) > 0:
+            wandb.log({
+                'Benchmark Student': bench_student_acc,
+                'Benchmark Teacher': bench_teacher_acc
+            })
     iterator.close()
     return natural_acc, robust_acc
 
@@ -291,6 +337,7 @@ def main():
         teacher_optimizer = optim.SGD(teacher_net.parameters(), lr=args.teacher_lr, momentum=0.9, weight_decay=2e-4)
     best_val = 0
     manager = Manager(net, device, adversarial=True)
+    test(-1, None)
     for epoch in range(args.resume_epoch, args.epochs):
         adjust_learning_rate(args.lr, optimizer, epoch)
         if should_teacher_tune(args.loss):
@@ -299,10 +346,10 @@ def main():
             train_loss = train(epoch, optimizer, teacher_optimizer)
         else:
             train_loss = train(epoch, optimizer)
-        if (epoch+1)%args.val_period == 0 and not DEBUG:
+        if (epoch+1)%args.val_period == 0:
             # current v.s. history best
             natural_val, robust_val = test(epoch, optimizer)
-            if robust_val > best_val:
+            if robust_val > best_val and not DEBUG:
                 best_val = robust_val
                 # save best ckpt
                 state = basic_net.state_dict()

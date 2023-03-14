@@ -12,7 +12,7 @@ teacher_path=/root/checkpoint/pretrain/teacher-epoch93.t7
 model_path=/root/checkpoint/pretrain/stu-epoch69.t7
 
 loss=ARD
-project_name=CT
+project_name=NEW
 for teacher_model in ResNet18 
 do 
     for dataset in CIFAR10
@@ -21,7 +21,7 @@ do
         do
             # name=coarse
             # name=coarse-memorization
-            name=baseline-rerun
+            name=baseline
             # name=distill-T-${teacher_model}-S-${model}-D-${dataset}-${loss}
 
             python -u main_d.py --teacher_model ${teacher_model} \

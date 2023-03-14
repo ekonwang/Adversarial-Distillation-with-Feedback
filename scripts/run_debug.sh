@@ -11,8 +11,8 @@ teacher_path=/root/checkpoint/pretrain/teacher-epoch93.t7
 model_path=/root/checkpoint/pretrain/stu-epoch69.t7
 
 loss=ARD-PRO
-project_name=CT
-for aux_lamda in 1 10 0.1 3 6
+project_name=NEW
+for aux_lamda in 0.01 0.1 1 3 6 10
 do
     for teacher_model in ResNet18 
     do 
