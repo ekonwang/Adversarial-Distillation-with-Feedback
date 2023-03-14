@@ -12,6 +12,7 @@ model_path=/root/checkpoint/pretrain/stu-epoch69.t7
 
 loss=ARD-PRO
 project_name=NEW
+memorization=1
 for aux_lamda in 0.01 0.1 1 3 6 10
 do
     for teacher_model in ResNet18 
@@ -20,8 +21,12 @@ do
         do
             for model in MobileNetV2
             do
-                # name=coarse
-                name=coarse-lamda-${aux_lamda}
+                if [ ${memorization} -gt 0 ] 
+                then
+                    name=coarse-memorization-lamda${aux_lamda}
+                else
+                    name=coarse-lamda${aux_lamda}
+                fi
 
                 python -u main_d.py --teacher_model ${teacher_model} \
                 --project_name ${project_name} \
@@ -33,7 +38,7 @@ do
                 --model_path ${model_path} \
                 --aux_lamda ${aux_lamda} \
                 --resume_epoch 70 \
-                --memorization 0 \
+                --memorization ${memorization} \
                 | tee log/${name}.log
             done
         done

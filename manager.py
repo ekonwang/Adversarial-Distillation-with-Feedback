@@ -90,6 +90,7 @@ def should_teacher_tune(loss_name):
         'ARD-PRO',
         'COMB',
         'KL-Coarse',
+        'MEMO'
     ]
     return (loss_name in registered_loss_names)
 

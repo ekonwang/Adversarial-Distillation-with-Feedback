@@ -97,9 +97,12 @@ def train(epoch, optimizer, teacher_optimizer=None):
                 loss, teacher_loss = ARDPROLoss.cal(basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets, args.alpha, args.temp)
             elif args.loss == 'KL-Coarse':
                 loss, teacher_loss = KLCoarseLoss.cal(basic_outputs, outputs, teacher_basic_outputs, teacher_outputs, targets, args.alpha, args.temp)
+            elif args.loss == 'MEMO':
+                loss = ARDLoss.cal(basic_outputs, outputs, teacher_basic_outputs, targets, args.alpha, args.temp)
+                teacher_loss = 0
+                args.memorization = 1
             elif args.loss == 'COMB':
                 # inner utils
-                
                 if args.aux_alpha == 'MOST':
                     alpha_factor = AlphaFactorMost.cal(teacher_outputs, targets) 
                 elif args.aux_alpha == 'LEAST':
@@ -159,6 +162,18 @@ def train(epoch, optimizer, teacher_optimizer=None):
 
 
         # Gradient monitor
+        if should_teacher_tune(args.loss):
+            teacher_grad_list = []
+            for param_group in teacher_optimizer.param_groups:
+                params = param_group['params']
+                for param in params:
+                    teacher_grad_list.append(torch.norm(param.grad.cpu(), p=2))
+            teacher_grads = np.array(teacher_grad_list)
+            if not DEBUG:
+                wandb.log({
+                    'Teacher MG': float(teacher_grads.mean())
+                }, step=num_steps)
+            
         grad_list = []
         for param_group in optimizer.param_groups:
             params = param_group['params']
