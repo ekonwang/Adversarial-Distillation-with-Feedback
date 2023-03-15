@@ -58,10 +58,8 @@ def set_seed(seed: int):
     torch.cuda.manual_seed(seed)
 
 def adjust_learning_rate(lr, optimizer, epoch):
-    if epoch >= 90:
+    if epoch >= 70:
         lr *= 0.001
-    elif epoch >= 70:
-        lr *= 0.01
     elif epoch >= 50:
         lr *= 0.1
     for param_group in optimizer.param_groups:

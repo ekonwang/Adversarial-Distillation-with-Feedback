@@ -1,6 +1,6 @@
 #!/bin/bash
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=2
 
 export TRANSFORMERS_OFFLINE=1
 export HF_DATASETS_OFFLINE=1
@@ -10,7 +10,8 @@ export TOKENIZERS_PARALLELISM=true
 # for model in WideResNet ResNet18 MobileNetV2
 teacher_path=/root/checkpoint/tinyproject/CIFAR10/adv-ResNet18-CIFAR10/optimal_epoch51_ckpt.t7
 
-loss=ARD-PRO
+project_name=pretrain
+loss=ARD
 for teacher_model in ResNet18 
 do 
     for dataset in CIFAR10
@@ -24,6 +25,8 @@ do
             --output ${name} \
             --loss ${loss} \
             --dataset ${dataset} \
+            --epochs 70 \
+            --project_name ${project_name} \
             --teacher_path ${teacher_path} \
             | tee log/${name}.log
         done

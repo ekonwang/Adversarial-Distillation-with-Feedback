@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 import numpy as np
 import os
-import copy
 import wandb
 from tqdm import tqdm
 from models import *
