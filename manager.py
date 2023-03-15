@@ -14,7 +14,7 @@ DEBUG=0
 
 def parse_args():
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-    parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
+    parser.add_argument('--lr', default=1e-1, type=float, help='learning rate')
     parser.add_argument('--teacher_lr', default=1e-5, type=float, help='teacher learning rate')
     # parser.add_argument('--lr_schedule', type=int, nargs='+', default=[100, 150], help='Decrease learning rate at these epochs.')
     parser.add_argument('--lr_factor', default=0.1, type=float, help='factor by which to decrease lr')
@@ -58,10 +58,10 @@ def set_seed(seed: int):
     torch.cuda.manual_seed(seed)
 
 def adjust_learning_rate(lr, optimizer, epoch):
-    if epoch >= 90:
-        lr *= 0.001
-    elif epoch >= 70:
-        lr *= 0.01
+    if epoch >= 80:
+        lr *= 1e-4
+    elif epoch >= 65:
+        lr *= 1e-2
     elif epoch >= 50:
         lr *= 0.1
     for param_group in optimizer.param_groups:
