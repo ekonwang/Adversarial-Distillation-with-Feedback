@@ -12,11 +12,11 @@ model_path=/root/checkpoint/tinyproject/CIFAR100/trades-ResNet18-CIFAR100/optima
 
 loss=TRADES
 project_name=pretrain
-for lambd in 0.5 1 2 6 10 
+for lambd in 1
 do
 for dataset in CIFAR100
 do
-    for model in ResNet18
+    for model in MobileNetV2
     do
         name=pretrain-${loss}-lambd${lambd}-${dataset}-${model}
 
