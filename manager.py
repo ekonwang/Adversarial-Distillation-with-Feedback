@@ -59,7 +59,7 @@ def set_seed(seed: int):
 
 def adjust_learning_rate(lr, optimizer, epoch):
     if epoch >= 70:
-        lr *= 0.001
+        lr *= 1e-3
     elif epoch >= 50:
         lr *= 0.1
     for param_group in optimizer.param_groups:

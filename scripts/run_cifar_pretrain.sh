@@ -8,13 +8,13 @@ export HF_HOME=/root/huggingface
 export TOKENIZERS_PARALLELISM=true
 
 # for model in WideResNet ResNet18 MobileNetV2
-teacher_path=/root/checkpoint/tinyproject/CIFAR10/adv-ResNet18-CIFAR10/optimal_epoch51_ckpt.t7
+teacher_path=/root/checkpoint/cache/resnet_cifar100_ckpt.t7
 
 project_name=pretrain
 loss=ARD
 for teacher_model in ResNet18 
 do 
-    for dataset in CIFAR10
+    for dataset in CIFAR100
     do
         for model in MobileNetV2
         do

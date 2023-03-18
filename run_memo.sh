@@ -8,20 +8,21 @@ export HF_HOME=/root/huggingface
 export TOKENIZERS_PARALLELISM=true
 
 # for model in WideResNet ResNet18 MobileNetV2
-teacher_path=/root/checkpoint/pretrain/teacher-epoch93.t7
-model_path=/root/checkpoint/pretrain/stu-epoch69.t7
+datanum=100
+teacher_path=/root/checkpoint/cache/resnet_cifar${datanum}_ckpt.t7
+model_path=/root/checkpoint/cache/distil_mbnv2_cifar${datanum}_ckpt.t7
 
 loss=MEMO
 project_name=NEW
 for teacher_model in ResNet18 
 do 
-    for dataset in CIFAR10
+    for dataset in CIFAR${datanum}
     do
         for model in MobileNetV2
         do
             # name=coarse
             # name=coarse-memorization
-            name=memorization
+            name=memorization-cifar${datanum}
             # name=distill-T-${teacher_model}-S-${model}-D-${dataset}-${loss}
 
             python -u main_d.py --teacher_model ${teacher_model} \
